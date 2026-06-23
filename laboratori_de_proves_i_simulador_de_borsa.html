@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Borsa Realista - Mode Mensual</title>
+    <!-- Tailwind CSS per a un disseny modern i adaptable -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons per a la iconografia neta -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        
+        .font-mono-custom {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Amagar scrollbars per defecte pero permetre el moviment */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Animacions d'estat de transacció */
+        @keyframes pulse-green {
+            0%, 100% { background-color: rgba(16, 185, 129, 0.1); }
+            50% { background-color: rgba(16, 185, 129, 0.3); }
+        }
+        .animate-pulse-green {
+            animation: pulse-green 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-emerald-500 selection:text-slate-950">
+
+    <!-- BARRA DE NAVEGACIÓ AMB STATUS -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <!-- Logo i titol del laboratori -->
+            <div class="flex items-center gap-3">
+                <div class="bg-gradient-to-tr from-emerald-500 to-cyan-500 text-slate-950 p-2.5 rounded-xl font-bold flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-extrabold tracking-tight text-white">BorsaSim <span class="text-emerald-400">Mensual</span></h1>
+                        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-wider">Estalvi de 500€/mes</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Simulador realista d'inversió periòdica controlat per Canvas</p>
+                </div>
+            </div>
+
+            <!-- Visor temporal i estats del compte de proves -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-4 bg-slate-900/60 p-1.5 rounded-2xl border border-slate-800">
+                <div class="text-center px-3 py-1 bg-slate-950/60 rounded-xl border border-slate-800">
+                    <span class="block text-[9px] text-slate-500 uppercase font-bold tracking-widest">Temps Actual</span>
+                    <span id="txt-data" class="text-md font-bold text-emerald-400 font-mono-custom">Gener 2015</span>
+                </div>
+                <div class="text-center px-3 py-1">
+                    <span class="block text-[9px] text-slate-500 uppercase font-bold tracking-widest">Efectiu Disponible</span>
+                    <span id="txt-saldo" class="text-sm font-bold text-white font-mono-custom">500,00 €</span>
+                </div>
+                <div class="text-center px-3 py-1">
+                    <span class="block text-[9px] text-slate-500 uppercase font-bold tracking-widest">Patrimoni Total</span>
+                    <span id="txt-patrimoni" class="text-sm font-bold text-amber-400 font-mono-custom">500,00 €</span>
+                </div>
+                
+                <button id="btn-passar-mes" onclick="avancarMes()" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md shadow-emerald-500/10 active:scale-95 group">
+                    <span>Següent Mes (+500€)</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-hover:translate-x-0.5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ENTORN PRINCIPAL DE PROVES (GRID) -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- COLUMNA ESQUERRA: Simulador Visual (8 Columnes) -->
+        <div class="lg:col-span-8 flex flex-col gap-6">
+            
+            <!-- PANEL DEL CANVAS (GRÀFIC D'EVOLUCIÓ GENERAL) -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-emerald-500 to-cyan-500"></div>
+                
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                        <h2 class="text-md font-bold text-white flex items-center gap-2">
+                            <i data-lucide="line-chart" class="w-5 h-5 text-emerald-400"></i>
+                            Gràfic Mensual de Cotitzacions (Canvas)
+                        </h2>
+                        <p class="text-xs text-slate-400">Usa la rodeta del ratolí per fer <strong>Zoom In/Out</strong>, i arrossega per moure't.</p>
+                    </div>
+                    
+                    <!-- Selecció de mode de visualització del Canvas -->
+                    <div class="flex bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-medium">
+                        <button onclick="canviarModeGrafic('linia')" id="btn-mode-linia" class="px-2.5 py-1 rounded bg-slate-800 text-white transition-colors">Línies</button>
+                        <button onclick="canviarModeGrafic('punts')" id="btn-mode-punts" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition-colors">Punts</button>
+                    </div>
+                </div>
+
+                <!-- LLEGENDA DEL GRAFIC AMB BOTÓ PER APAGAR/ENCENDRE LÍNIES -->
+                <div id="llegenda-grafic" class="flex flex-wrap gap-1.5 text-[10px] bg-slate-950/40 p-2 rounded-xl border border-slate-800/40 max-h-24 overflow-y-auto no-scrollbar">
+                    <!-- S'omple amb Javascript -->
+                </div>
+
+                <!-- CONTENIDOR DEL CANVAS DE DIBUIX -->
+                <div class="w-full bg-slate-950/80 rounded-xl p-1 border border-slate-800 flex justify-center items-center relative" style="height: 340px;">
+                    <canvas id="canvas-borsa" class="w-full h-full block cursor-crosshair"></canvas>
+                    
+                    <!-- Tooltip flotant interactiu del canvas -->
+                    <div id="canvas-tooltip" class="absolute bg-slate-900 border border-slate-700 p-2.5 rounded-lg shadow-xl text-[10px] text-slate-300 pointer-events-none hidden flex-col gap-1 z-10 max-w-[150px]">
+                        <!-- Informació dinàmica d'un punt -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL DE TAULA D'ACCIONS DE COMPRA I COMPORTAMENT -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden">
+                <div class="p-4 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-slate-900/20">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i data-lucide="briefcase" class="w-4 h-4 text-emerald-400"></i>
+                            Cartera de Valors i Rendiment del teu Capital
+                        </h3>
+                        <p class="text-xs text-slate-500">Mostra el preu de compra mitjà per veure quant han pujat les teves accions</p>
+                    </div>
+                    <span id="comp-count-tag" class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-bold">30 Empreses</span>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-[10px] text-slate-400 bg-slate-950/60 uppercase tracking-wider font-bold">
+                                <th class="p-3 pl-5">Empresa</th>
+                                <th class="p-3 text-right">Preu Actual</th>
+                                <th class="p-3 text-right">Preu Compra Mitjà</th>
+                                <th class="p-3 text-right">Accions</th>
+                                <th class="p-3 text-right">Evolució / Pujada</th>
+                                <th class="p-3 text-right pr-5">Valor en Cartera</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taula-empreses" class="divide-y divide-slate-800/40 text-xs">
+                            <!-- S'injecta de forma dinàmica -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- COLUMNA DRETA: Operacions, Sandbox i Historial (4 Columnes) -->
+        <div class="lg:col-span-4 flex flex-col gap-6">
+            
+            <!-- PANEL D'OPERACIONS (COMPRA I VENDA REALISTA AMB MÈTODE DE CERCA) -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl"></div>
+                <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <i data-lucide="arrow-left-right" class="w-4 h-4 text-emerald-400"></i>
+                    Operar al Mercat (Mínim 100 €)
+                </h3>
+
+                <!-- Tria de la llista d'empreses amb Cerca -->
+                <div class="mb-3 relative">
+                    <label class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Empresa Seleccionada</label>
+                    <div class="relative">
+                        <input type="text" id="input-cerca-empresa" placeholder="Cerca empresa per nom... (ex: Apple)" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 pr-10" oninput="filtrarEmpresesCerca(this.value)" onfocus="mostrarResultatsCerca()">
+                        <div class="absolute right-3 top-2.5 text-slate-500">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <!-- Llista flotant de resultats cerca -->
+                    <div id="resultats-cerca" class="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-slate-900 border border-slate-800 rounded-xl z-50 hidden no-scrollbar">
+                        <!-- S'omple dinàmicament per JS -->
+                    </div>
+                </div>
+
+                <!-- Monitorització de dades de l'empresa triada -->
+                <div class="grid grid-cols-2 gap-2 bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl mb-4 text-[11px]">
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase tracking-wider font-bold">Preu acció</span>
+                        <span id="detalls-preu" class="font-bold text-white text-xs font-mono-custom">0,00 €</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase tracking-wider font-bold">Les teves accions</span>
+                        <span id="detalls-accions" class="font-bold text-emerald-400 text-xs font-mono-custom">0.0000 u</span>
+                    </div>
+                    <div class="col-span-2 pt-2 border-t border-slate-800/40">
+                        <span class="text-slate-500 block text-[9px] uppercase tracking-wider font-bold">Valor actual acumulat</span>
+                        <span id="detalls-valor-actual" class="font-bold text-amber-500 font-mono-custom">0,00 €</span>
+                    </div>
+                </div>
+
+                <!-- Formulari d'import -->
+                <div class="mb-4">
+                    <label class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Import de la Transacció (€)</label>
+                    <div class="relative">
+                        <input type="number" id="input-import-proves" min="100" step="any" placeholder="Mínim 100€" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-mono-custom focus:outline-none focus:border-emerald-500 pr-10">
+                        <div class="absolute right-3 top-2.5 text-[10px] font-bold text-slate-500 font-mono-custom">EUR</div>
+                    </div>
+                    <!-- Dreceres d'inversió ràpides -->
+                    <div class="grid grid-cols-3 gap-1.5 mt-2 text-[9px] font-bold">
+                        <button onclick="omplirImportFix(100)" class="bg-slate-950 hover:bg-slate-800 text-slate-400 px-1 py-1.5 rounded-lg border border-slate-800">100 € (Mínim)</button>
+                        <button onclick="omplirImportFix(250)" class="bg-slate-950 hover:bg-slate-800 text-slate-400 px-1 py-1.5 rounded-lg border border-slate-800">250 €</button>
+                        <button onclick="omplirImportFix(500)" class="bg-slate-950 hover:bg-slate-800 text-slate-300 px-1 py-1.5 rounded-lg border border-slate-800">500 €</button>
+                    </div>
+                </div>
+
+                <!-- Botons d'acció de mercat -->
+                <div class="flex flex-col gap-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <!-- Posar fons a la inversió (Comprar) -->
+                        <button onclick="comprarAccions()" class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            Invertir diners
+                        </button>
+                        <!-- Retirar part de la inversió (Venda parcial, mínim 100 €) -->
+                        <button onclick="retirarPartInversio()" class="bg-slate-950 hover:bg-slate-900 border border-slate-800 text-rose-400 font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs">
+                            <i data-lucide="minus-circle" class="w-4 h-4"></i>
+                            Retirar part
+                        </button>
+                    </div>
+                    <!-- Vendre tota l'acció (Venda total, es liquida l'actiu) -->
+                    <button onclick="vendreAccioSencera()" class="w-full bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/50 hover:border-rose-500 text-rose-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        Vendre i tancar acció
+                    </button>
+                </div>
+            </div>
+
+            <!-- PANEL DE PRÉSTECS BANCARIS -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-16 h-16 bg-rose-500/5 rounded-full blur-xl"></div>
+                <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <i data-lucide="landmark" class="w-4 h-4 text-emerald-400"></i>
+                    Banc: Demanar un Préstec
+                </h3>
+                <div class="mb-3">
+                    <label class="block text-[10px] text-slate-400 font-bold uppercase mb-1">Import (€) - Mín. 500</label>
+                    <input type="number" id="input-prestec-import" min="500" placeholder="Ex: 2000" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" oninput="calcularPrestec()">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-[10px] text-slate-400 font-bold uppercase mb-1 flex justify-between">
+                        <span>Termini d'amortització</span>
+                        <span id="label-prestec-mesos" class="text-emerald-400">12 mesos</span>
+                    </label>
+                    <input type="range" id="input-prestec-mesos" min="6" max="60" step="1" value="12" class="w-full accent-emerald-500" oninput="calcularPrestec()">
+                </div>
+                <div class="bg-slate-950/60 p-3 rounded-xl mb-3 text-[11px] grid grid-cols-2 gap-2 border border-slate-800/80">
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase font-bold">Interès Fix</span>
+                        <span id="detalls-prestec-interes" class="font-bold text-rose-400">0,00%</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[9px] uppercase font-bold">Quota Mensual</span>
+                        <span id="detalls-prestec-quota" class="font-bold text-emerald-400 font-mono-custom">0,00 €</span>
+                    </div>
+                </div>
+                <button onclick="contractarPrestec()" class="w-full bg-slate-800 hover:bg-emerald-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-xs flex justify-center gap-1.5 active:scale-95">
+                    <i data-lucide="pen-tool" class="w-4 h-4"></i> Signar Préstec
+                </button>
+                <div id="llista-prestecs-actius" class="mt-3 flex flex-col gap-2">
+                    <!-- Es renderitzen els préstecs aquí -->
+                </div>
+            </div>
+
+            <!-- PANEL INFORMATIU DEL PRESSUPOST REALISTA -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-16 h-16 bg-cyan-500/5 rounded-full blur-xl"></div>
+                <h3 class="text-sm font-bold text-white mb-2.5 flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4 text-cyan-400"></i>
+                    Com funciona aquest estalvi?
+                </h3>
+                <div class="text-xs text-slate-400 leading-relaxed flex flex-col gap-2">
+                    <p>Cada vegada que fas clic a <strong class="text-emerald-400">Següent Mes</strong>, avances un mes en l'historial i rebràs <strong class="text-white">500 € nets</strong> que s'afegeixen al teu "Efectiu Disponible".</p>
+                    <p>Això representa una estratègia realista d'<strong>inversió periòdica</strong>. Permet veure la importància de guardar una part dels teus diners cada mes per anar-los invertint constantment.</p>
+                </div>
+            </div>
+
+            <!-- PANEL DE NOTÍCIES HISTÒRIQUES DEL MERCAT -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="newspaper" class="w-4 h-4 text-emerald-400"></i>
+                    Notícia Històrica (Mes a Mes)
+                </h3>
+                <div id="bloc-noticies" class="bg-slate-950/60 border border-slate-800 p-4 rounded-xl text-xs leading-relaxed text-slate-300">
+                    Inici del simulador. Gener de 2015. Acabes de guardar els teus primers 500 € d'aquest mes. Quina acció t'agradaria analitzar o començar a comprar?
+                </div>
+            </div>
+
+            <!-- PANEL HISTORIAL DE TRANSACCIONS EN MEMÒRIA -->
+            <div class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col min-h-[180px]">
+                <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i>
+                    Registre de Laboratori (Logs)
+                </h3>
+                <div id="llistat-logs" class="flex-1 overflow-y-auto max-h-[180px] no-scrollbar flex flex-col gap-2 text-[10px]">
+                    <div class="text-slate-600 text-center py-6 font-mono-custom">Encara no s'ha fet cap operació.</div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- PEU DE PÀGINA -->
+    <footer class="border-t border-slate-800 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
+        <p>&copy; 2026 BorsaSim • Entorn de Simulació Dinàmic amb HTML5 Canvas • Tots els drets reservats</p>
+    </footer>
+
+    <!-- MODAL PERSONALITZAT PER AVISOS (NO ALERT) -->
+    <div id="alerta-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+        <div class="bg-slate-900 border border-slate-800 max-w-sm w-full mx-4 rounded-2xl p-6 shadow-2xl relative">
+            <div class="flex items-center gap-3 text-amber-500 mb-4">
+                <i data-lucide="alert-circle" class="w-7 h-7"></i>
+                <h4 class="text-md font-bold text-white" id="alerta-titol">Notificació de Borsa</h4>
+            </div>
+            <p class="text-xs text-slate-300 mb-6 leading-relaxed" id="alerta-missatge">Cos de l'alerta...</p>
+            <div class="flex justify-end">
+                <button onclick="amagarAlertaModal()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs transition-colors">
+                    D'acord
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGICA SCRIPT DEL SIMULADOR REALISTA -->
+    <script>
+        // Dades reals i simulades anuals base que serveixen per generar les dades mensuals realistes interpolades.
+        // Conté 30 empreses: 15 que han anat a l'alça (Up) i 15 que han anat a la baixa (Down) en la trajectòria 2015-2026.
+        const dadesAnualsBase = {
+            // 15 empreses que han PUJAT (10 inicials + 5 noves)
+            "Apple (AAPL)":         { color: "#f87171", preus: [100, 115, 170, 150, 290, 370, 175, 130, 190, 210, 240, 265] },
+            "Microsoft (MSFT)":     { color: "#60a5fa", preus: [50,  60,  85,  100, 155, 220, 335, 240, 375, 420, 445, 480] },
+            "Amazon (AMZN)":        { color: "#fbbf24", preus: [30,  38,  58,  75,  92,  160, 165, 85,  150, 180, 205, 220] },
+            "Google (GOOGL)":       { color: "#34d399", preus: [27,  39,  52,  52,  67,  88,  145, 90,  140, 175, 190, 215] },
+            "Tesla (TSLA)":         { color: "#c084fc", preus: [15,  14,  21,  22,  28,  235, 350, 120, 250, 180, 160, 195] },
+            "Netflix (NFLX)":       { color: "#f43f5e", preus: [70,  120, 190, 260, 320, 540, 600, 290, 480, 650, 690, 740] },
+            "Meta (META)":          { color: "#818cf8", preus: [80,  115, 175, 130, 200, 270, 330, 120, 350, 500, 530, 575] },
+            "Nvidia (NVDA)":        { color: "#4ade80", preus: [5,   7,   14,  13,  15,  32,  73,  145, 495, 900, 1100, 1350] },
+            "Coca-Cola (KO)":       { color: "#fca5a5", preus: [40,  41,  45,  47,  55,  53,  58,  63,  58,  62,  65,  68] },
+            "Nintendo (NTDOY)":     { color: "#f97316", preus: [15,  28,  40,  35,  48,  50,  62,  50,  12,  14,  16,  18] },
+            "AMD (AMD)":            { color: "#f59e0b", preus: [2,   3,   10,  11,  45,  90,  140, 65,  120, 160, 175, 210] },
+            "Broadcom (AVGO)":      { color: "#ec4899", preus: [120, 150, 230, 210, 300, 410, 620, 520, 950, 1200, 1300, 1380] },
+            "Eli Lilly (LLY)":      { color: "#10b981", preus: [80,  75,  85,  110, 130, 160, 260, 340, 580, 800, 850, 920] },
+            "Costco (COST)":        { color: "#84cc16", preus: [140, 150, 180, 190, 280, 360, 530, 450, 650, 720, 810, 890] },
+            "Adobe (ADBE)":         { color: "#a855f7", preus: [70,  100, 170, 220, 320, 480, 650, 340, 580, 510, 530, 590] },
+            
+            // 15 empreses que han BAIXAT (Noves)
+            "BlackBerry (BB)":      { color: "#475569", preus: [11,  8,   12,  8,   6,   7,   10,  4,   3.5, 2.5, 2.2, 1.8] },
+            "GoPro (GPRO)":         { color: "#2563eb", preus: [50,  12,  9,   5,   4,   8,   10,  5,   3.5, 1.8, 1.5, 1.1] },
+            "Macy's (M)":           { color: "#db2777", preus: [65,  40,  22,  30,  16,  11,  26,  20,  15,  18,  16,  14] },
+            "Nokia (NOK)":          { color: "#0284c7", preus: [7.5, 5.2, 4.8, 5.5, 4.0, 3.8, 6.0, 4.5, 4.1, 3.5, 3.8, 3.2] },
+            "Under Armour (UAA)":   { color: "#4f46e5", preus: [45,  30,  14,  18,  20,  16,  22,  10,  8,   7,   6.5, 5.8] },
+            "Intel (INTC)":         { color: "#0ea5e9", preus: [35,  32,  44,  46,  56,  50,  53,  26,  44,  30,  22,  18] },
+            "Walgreens (WBA)":      { color: "#f43f5e", preus: [85,  80,  70,  72,  55,  40,  52,  36,  26,  12,  10,  8] },
+            "Peloton (PTON)":       { color: "#e11d48", preus: [25,  23,  22,  21,  28,  150, 38,  10,  6,   4,   3.5, 2.0] },
+            "Beyond Meat (BYND)":   { color: "#16a34a", preus: [45,  40,  35,  32,  120, 130, 65,  15,  8,   7,   5,   4] },
+            "WeWork (WE)":          { color: "#d97706", preus: [50,  48,  45,  42,  40,  35,  12,  3,   0.2, 0.05, 0.01, 0.01] },
+            "Tupperware (TUP)":     { color: "#65a30d", preus: [60,  55,  62,  32,  18,  8,   15,  4,   1.5, 1.1, 0.5, 0.2] },
+            "Hertz (HTZ)":          { color: "#ca8a04", preus: [45,  38,  22,  16,  15,  2,   24,  16,  10,  4,   3.2, 2.5] },
+            "Groupon (GRPN)":       { color: "#059669", preus: [40,  22,  18,  15,  12,  22,  25,  10,  6,   12,  14,  11] },
+            "Credit Suisse (CS)":   { color: "#dc2626", preus: [25,  18,  16,  12,  13,  11,  10,  3,   0.8, 0.1, 0.05, 0.01] },
+            "AMC Ent. (AMC)":       { color: "#9333ea", preus: [22,  15,  12,  14,  8,   2,   180, 40,  8,   4.5, 3.8, 3.0] }
+        };
+
+        const anys = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+        const nomsMesos = ["Gener", "Febrer", "Març", "Abril", "Maig", "Juny", "Juliol", "Agost", "Setembre", "Octubre", "Novembre", "Desembre"];
+
+        // Titulars d'esdeveniments anuals per referència mensual
+        const titularsAnuals = {
+            2015: "Inici de la simulació. El mercat comença l'any amb estabilitat econòmica i creixement tecnològic constant.",
+            2016: "Microsoft comença a guanyar terreny en cloud computing amb Azure, mentre que el consum general es manté sòlid.",
+            2017: "Nintendo sorprèn al món amb la Nintendo Switch, aconseguint que les seves accions es disparin en pocs mesos.",
+            2018: "Guerra comercial i pressions d'aranzels internacionals debiliten les cotitzacions a nivell global a mitjans d'any.",
+            2019: "Recuperació excel·lent en les plataformes tecnològiques. Apple consolida nou serveis digitals.",
+            2020: "Impacte i confinaments de la COVID-19. Les empreses com Netflix, Amazon i Tesla es disparen pel consum domèstic.",
+            2021: "Època d'eufòria i valoracions històriques gràcies als tipus d'interès baixos. El capital flueix intensament.",
+            2022: "Inici de la inflació elevada i pujada de tipus. Els mercats viuen correccions molt severes a tot el món.",
+            2023: "Eclosió comercial de la Intel·ligència Artificial. Nvidia comença a escalar ràpidament com a líder absolut.",
+            2024: "Nvidia lidera de forma absoluta el mercat dels semiconductors d'IA, batent rècords històrics de capitalització.",
+            2025: "La despesa corporativa en servidors d'intel·ligència artificial impulsa els preus de Microsoft, Meta i Google.",
+            2026: "Fi del simulador! Els mercats s'estabilitzen i consoliden les noves rutes industrials de l'era digital."
+        };
+
+        // Generar dades mensuals interpolades a partir de les anuals
+        const dadesEmpreses = {};
+        const totalMesos = 144; // 12 anys * 12 mesos
+
+        function generarDadesMensuals() {
+            for (let empresa in dadesAnualsBase) {
+                const color = dadesAnualsBase[empresa].color;
+                const preusAnuals = dadesAnualsBase[empresa].preus;
+                const preusMensuals = [];
+
+                for (let i = 0; i < preusAnuals.length; i++) {
+                    const preuInici = preusAnuals[i];
+                    // Si és l'últim any, interpolar amb una petita variació alcista fins al final
+                    const preuFi = (i < preusAnuals.length - 1) ? preusAnuals[i + 1] : preuInici * 1.05;
+
+                    for (let m = 0; m < 12; m++) {
+                        const rati = m / 12;
+                        let preuInterp = preuInici + (preuFi - preuInici) * rati;
+                        // Afegir petita volatilitat mensual realista basada en determinisme de funcions sinusoidals
+                        const soroll = Math.sin(i * 12 + m) * (preuInterp * 0.04);
+                        preusMensuals.push(Math.max(0.01, preuInterp + soroll));
+                    }
+                }
+                dadesEmpreses[empresa] = {
+                    color: color,
+                    preus: preusMensuals
+                };
+            }
+        }
+
+        // Estat del Sandbox
+        let indexMesActual = 0; // Comença a mes 0 (Gener 2015)
+        let efectiu = 500; // Comença amb el primer mes de 500 €
+        let carteraJugador = {}; // Accions acumulades per empresa
+        let totalDinersInvertits = {}; // Total d'euros utilitzats per calcular el preu mitjà de compra
+        let estatLiniesVisibles = {}; // Visualització de línies en el Canvas
+        let modeGrafic = 'linia';
+        let historialLogs = [];
+        let empresaSeleccionadaActual = "Apple (AAPL)";
+
+        // Variables pel zoom del gràfic i els préstecs
+        let viewStart = 0;
+        let viewEnd = totalMesos - 1;
+        let isDraggingCanvas = false;
+        let dragLastX = 0;
+        let llistaPrestecsActius = [];
+
+        // Inicialitzar estructura d'empreses
+        for (let empresa in dadesAnualsBase) {
+            carteraJugador[empresa] = 0;
+            totalDinersInvertits[empresa] = 0;
+            estatLiniesVisibles[empresa] = true;
+        }
+
+        const canvas = document.getElementById('canvas-borsa');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('canvas-tooltip');
+
+        function adaptarCanvasAMida() {
+            const caixaContenidora = canvas.parentNode;
+            canvas.width = caixaContenidora.clientWidth * window.devicePixelRatio;
+            canvas.height = caixaContenidora.clientHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            dibuixarCanvasPrincipal();
+        }
+
+        function amagarAlertaModal() {
+            document.getElementById('alerta-modal').classList.add('hidden');
+        }
+
+        function mostrarAlertaSandbox(titol, missatge) {
+            document.getElementById('alerta-titol').textContent = titol;
+            document.getElementById('alerta-missatge').textContent = missatge;
+            document.getElementById('alerta-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function obtenirFormatData(indexMes) {
+            const anyCalculat = 2015 + Math.floor(indexMes / 12);
+            const mesCalculat = indexMes % 12;
+            return `${nomsMesos[mesCalculat]} ${anyCalculat}`;
+        }
+
+        function dibuixarLlegenda() {
+            const divLlegenda = document.getElementById('llegenda-grafic');
+            divLlegenda.innerHTML = '';
+
+            for (let empresa in dadesEmpreses) {
+                const visible = estatLiniesVisibles[empresa];
+                const botoLlegenda = document.createElement('button');
+                botoLlegenda.className = `flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold border transition-all ${
+                    visible 
+                    ? 'bg-slate-900 border-slate-700 text-white' 
+                    : 'bg-slate-950/20 border-slate-900/40 text-slate-600 line-through'
+                }`;
+                botoLlegenda.onclick = () => togglerLiniaBorsa(empresa);
+                botoLlegenda.innerHTML = `
+                    <span class="w-2 h-2 rounded-full inline-block" style="background-color: ${visible ? dadesEmpreses[empresa].color : '#334155'}"></span>
+                    <span>${empresa.split(" (")[0]}</span>
+                `;
+                divLlegenda.appendChild(botoLlegenda);
+            }
+        }
+
+        function togglerLiniaBorsa(nomEmpresa) {
+            estatLiniesVisibles[nomEmpresa] = !estatLiniesVisibles[nomEmpresa];
+            dibuixarLlegenda();
+            dibuixarCanvasPrincipal();
+        }
+
+        function dibuixarCanvasPrincipal() {
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+
+            ctx.clearRect(0, 0, w, h);
+
+            const margeEsquerre = 50;
+            const margeDret = 20;
+            const margeSuperior = 25;
+            const margeInferior = 35;
+
+            const ampleGrafic = w - margeEsquerre - margeDret;
+            const altGrafic = h - margeSuperior - margeInferior;
+
+            const maxPreuEuros = 1400; 
+            const quantitatDivisions = 6;
+
+            // Graella vertical de preus
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#64748b';
+            ctx.font = '9px "JetBrains Mono"';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i <= quantitatDivisions; i++) {
+                const rati = i / quantitatDivisions;
+                const posacioY = margeSuperior + altGrafic * (1 - rati);
+                const valorEurosLine = maxPreuEuros * rati;
+
+                ctx.beginPath();
+                ctx.moveTo(margeEsquerre, posacioY);
+                ctx.lineTo(w - margeDret, posacioY);
+                ctx.stroke();
+
+                ctx.fillText(`${Math.round(valorEurosLine)}€`, margeEsquerre - 8, posacioY);
+            }
+
+            const rangVisibleMesos = viewEnd - viewStart;
+
+            // Marcadors d'anys a la línia de temps
+            const totalAnys = anys.length;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
+            for (let i = 0; i < totalAnys; i++) {
+                const indexMesAny = i * 12;
+                
+                // Dibuixar només si cau dins de la vista amb zoom
+                if (indexMesAny >= viewStart && indexMesAny <= viewEnd) {
+                    const ratiX = (indexMesAny - viewStart) / rangVisibleMesos;
+                    const posacioX = margeEsquerre + ampleGrafic * ratiX;
+
+                    ctx.strokeStyle = indexMesAny <= indexMesActual ? '#1e293b' : '#0f172a';
+                    ctx.beginPath();
+                    ctx.moveTo(posacioX, margeSuperior);
+                    ctx.lineTo(posacioX, h - margeInferior);
+                    ctx.stroke();
+
+                    const anyEspectacle = anys[i];
+                    const ésAnyActual = anyEspectacle === (2015 + Math.floor(indexMesActual / 12));
+                    ctx.fillStyle = ésAnyActual ? '#34d399' : '#475569';
+                    ctx.font = ésAnyActual ? 'bold 9px "JetBrains Mono"' : '9px "JetBrains Mono"';
+                    ctx.fillText(anyEspectacle, posacioX, h - margeInferior + 8);
+                }
+            }
+
+            // Indicador del mes actual (línia vertical de seguiment en verd)
+            if (indexMesActual >= viewStart && indexMesActual <= viewEnd) {
+                const xActual = margeEsquerre + ampleGrafic * ((indexMesActual - viewStart) / rangVisibleMesos);
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(xActual, margeSuperior);
+                ctx.lineTo(xActual, h - margeInferior);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Pintar línies de borsa d'empreses visibles
+            for (let empresa in dadesEmpreses) {
+                if (!estatLiniesVisibles[empresa]) continue;
+
+                const informacio = dadesEmpreses[empresa];
+                const preusHistoric = informacio.preus;
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = informacio.color;
+                ctx.fillStyle = informacio.color;
+
+                const startIdxMath = Math.max(0, Math.floor(viewStart));
+                const endIdxMath = Math.min(indexMesActual, Math.ceil(viewEnd));
+
+                if (modeGrafic === 'linia') {
+                    ctx.beginPath();
+                    let iniciat = false;
+                    for (let i = startIdxMath; i <= endIdxMath; i++) {
+                        const rx = (i - viewStart) / rangVisibleMesos;
+                        const px = margeEsquerre + ampleGrafic * rx;
+                        const ry = preusHistoric[i] / maxPreuEuros;
+                        const py = margeSuperior + altGrafic * (1 - ry);
+
+                        if (!iniciat) {
+                            ctx.moveTo(px, py);
+                            iniciat = true;
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    if (iniciat) ctx.stroke();
+                }
+
+                // Punts detallats al final del mes actual (només si és visible al zoom)
+                if (indexMesActual >= viewStart && indexMesActual <= viewEnd) {
+                    const rxActual = (indexMesActual - viewStart) / rangVisibleMesos;
+                    const pxActual = margeEsquerre + ampleGrafic * rxActual;
+                    const ryActual = preusHistoric[indexMesActual] / maxPreuEuros;
+                    const pyActual = margeSuperior + altGrafic * (1 - ryActual);
+
+                    ctx.beginPath();
+                    ctx.arc(pxActual, pyActual, 4, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+
+                if (modeGrafic === 'punts') {
+                    // Dibuixar punts petits per la resta de l'historial del temps dins del zoom
+                    for (let i = startIdxMath; i <= endIdxMath; i += 3) {
+                        const rx = (i - viewStart) / rangVisibleMesos;
+                        const px = margeEsquerre + ampleGrafic * rx;
+                        const ry = preusHistoric[i] / maxPreuEuros;
+                        const py = margeSuperior + altGrafic * (1 - ry);
+
+                        ctx.beginPath();
+                        ctx.arc(px, py, 1.5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        // Lògica de Zoom i Drag (Arrossegar) per al Canvas
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const margeEsquerre = 50;
+            const ampleGrafic = rect.width - margeEsquerre - 20;
+
+            let focusRati = (mouseX - margeEsquerre) / ampleGrafic;
+            if (focusRati < 0) focusRati = 0;
+            if (focusRati > 1) focusRati = 1;
+
+            let rangVisible = viewEnd - viewStart;
+            let zoomAmount = e.deltaY > 0 ? 12 : -12; // Ampliar/reduir 12 mesos per tick
+
+            let nouRang = rangVisible + zoomAmount;
+            if (nouRang < 12) nouRang = 12; // Mínim un any visible
+            if (nouRang > totalMesos - 1) nouRang = totalMesos - 1;
+
+            let diff = nouRang - rangVisible;
+            viewStart -= diff * focusRati;
+            viewEnd += diff * (1 - focusRati);
+
+            if (viewStart < 0) {
+                viewEnd -= viewStart;
+                viewStart = 0;
+            }
+            if (viewEnd > totalMesos - 1) {
+                viewStart -= (viewEnd - (totalMesos - 1));
+                viewEnd = totalMesos - 1;
+            }
+
+            dibuixarCanvasPrincipal();
+        }, {passive: false});
+
+        canvas.addEventListener('mousedown', e => { isDraggingCanvas = true; dragLastX = e.clientX; });
+        window.addEventListener('mouseup', () => { isDraggingCanvas = false; });
+        
+        // Gestió del ratolí a sobre del Canvas interactiu (Tooltip de borsa)
+        canvas.addEventListener('mousemove', function(esdeveniment) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = esdeveniment.clientX - rect.left;
+            const mouseY = esdeveniment.clientY - rect.top;
+
+            const margeEsquerre = 50;
+            const margeDret = 20;
+            const margeSuperior = 25;
+            const margeInferior = 35;
+
+            const w = rect.width;
+            const h = rect.height;
+            const ampleGrafic = w - margeEsquerre - margeDret;
+            const altGrafic = h - margeSuperior - margeInferior;
+            const maxPreuEuros = 1400;
+
+            // Gestió del Drag (Desplaçament lateral per la gràfica)
+            if (isDraggingCanvas) {
+                let deltaX = esdeveniment.clientX - dragLastX;
+                let mesosPerPixel = (viewEnd - viewStart) / ampleGrafic;
+                let shiftMesos = -(deltaX * mesosPerPixel);
+
+                if (viewStart + shiftMesos < 0) shiftMesos = -viewStart;
+                if (viewEnd + shiftMesos > totalMesos - 1) shiftMesos = (totalMesos - 1) - viewEnd;
+
+                viewStart += shiftMesos;
+                viewEnd += shiftMesos;
+                dragLastX = esdeveniment.clientX;
+                dibuixarCanvasPrincipal();
+                return; // Evita processar el tooltip mentre arrossegues
+            }
+
+            // Trobar el mes més proper dins del rang de zoom
+            const ratiX = (mouseX - margeEsquerre) / ampleGrafic;
+            let indexTrobat = Math.round(viewStart + (ratiX * (viewEnd - viewStart)));
+
+            if (indexTrobat < 0) indexTrobat = 0;
+            if (indexTrobat > indexMesActual) indexTrobat = indexMesActual;
+
+            const xCalculat = margeEsquerre + ampleGrafic * ((indexTrobat - viewStart) / (viewEnd - viewStart));
+            
+            if (Math.abs(mouseX - xCalculat) < 15) {
+                let empresaPropera = null;
+                let distanciaMinima = Infinity;
+                let preuTrobat = 0;
+
+                for (let empresa in dadesEmpreses) {
+                    if (!estatLiniesVisibles[empresa]) continue;
+
+                    const preuEnAquellMes = dadesEmpreses[empresa].preus[indexTrobat];
+                    const ratiY = preuEnAquellMes / maxPreuEuros;
+                    const yCalculat = margeSuperior + altGrafic * (1 - ratiY);
+
+                    const distY = Math.abs(mouseY - yCalculat);
+                    if (distY < distanciaMinima) {
+                        distanciaMinima = distY;
+                        empresaPropera = empresa;
+                        preuTrobat = preuEnAquellMes;
+                    }
+                }
+
+                if (distanciaMinima < 30 && empresaPropera) {
+                    tooltip.classList.remove('hidden');
+                    tooltip.style.left = `${xCalculat + 15}px`;
+                    tooltip.style.top = `${mouseY - 15}px`;
+                    
+                    tooltip.innerHTML = `
+                        <div class="font-bold text-white text-[11px] mb-1 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full inline-block" style="background-color: ${dadesEmpreses[empresaPropera].color}"></span>
+                            ${empresaPropera.split(" (")[0]}
+                        </div>
+                        <div class="text-[9px] text-slate-400">Mes: <span class="font-bold text-slate-200">${obtenirFormatData(indexTrobat)}</span></div>
+                        <div class="text-[9px] text-slate-400">Preu: <span class="font-bold text-emerald-400 font-mono-custom">${preuTrobat.toFixed(2)} €</span></div>
+                    `;
+                    return;
+                }
+            }
+            tooltip.classList.add('hidden');
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            tooltip.classList.add('hidden');
+        });
+
+        function canviarModeGrafic(nouMode) {
+            modeGrafic = nouMode;
+            document.getElementById('btn-mode-linia').className = `px-2.5 py-1 rounded transition-colors ${nouMode === 'linia' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('btn-mode-punts').className = `px-2.5 py-1 rounded transition-colors ${nouMode === 'punts' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`;
+            dibuixarCanvasPrincipal();
+        }
+
+        // Lògica del cercador d'empreses per a la transacció
+        function inicialitzarCerca() {
+            const input = document.getElementById('input-cerca-empresa');
+            input.value = empresaSeleccionadaActual;
+
+            // Tancar resultats quan es clica a fora del cercador
+            document.addEventListener('click', function(e) {
+                const contenidorResultats = document.getElementById('resultats-cerca');
+                if (!contenidorResultats.contains(e.target) && e.target !== input) {
+                    contenidorResultats.classList.add('hidden');
+                }
+            });
+        }
+
+        function mostrarResultatsCerca() {
+            const llista = document.getElementById('resultats-cerca');
+            llista.classList.remove('hidden');
+            filtrarEmpresesCerca(document.getElementById('input-cerca-empresa').value);
+        }
+
+        function filtrarEmpresesCerca(query) {
+            const llista = document.getElementById('resultats-cerca');
+            llista.innerHTML = '';
+            const q = query.toLowerCase();
+
+            let matches = 0;
+            for (let empresa in dadesEmpreses) {
+                if (empresa.toLowerCase().includes(q)) {
+                    const visible = estatLiniesVisibles[empresa];
+                    const div = document.createElement('div');
+                    div.className = "p-2.5 text-xs hover:bg-slate-800 cursor-pointer text-slate-200 flex items-center justify-between border-b border-slate-800/40";
+                    div.innerHTML = `
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full inline-block" style="background-color: ${dadesEmpreses[empresa].color}"></span>
+                            <span class="font-medium">${empresa}</span>
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono-custom">${dadesEmpreses[empresa].preus[indexMesActual].toFixed(2)} €</span>
+                    `;
+                    div.onclick = () => {
+                        seleccionarEmpresaCercada(empresa);
+                    };
+                    llista.appendChild(div);
+                    matches++;
+                }
+            }
+
+            if (matches === 0) {
+                llista.innerHTML = `<div class="p-3 text-xs text-slate-500 italic text-center">Cap empresa trobada</div>`;
+            }
+        }
+
+        function seleccionarEmpresaCercada(empresa) {
+            document.getElementById('input-cerca-empresa').value = empresa;
+            empresaSeleccionadaActual = empresa;
+            seleccionarEmpresa(empresa);
+            document.getElementById('resultats-cerca').classList.add('hidden');
+        }
+
+        // Actualitza la taula d'empreses, patrimoni, i preu de compra mitjà
+        function actualitzarInterficie() {
+            const dataText = obtenirFormatData(indexMesActual);
+            document.getElementById('txt-data').textContent = dataText;
+            document.getElementById('txt-saldo').textContent = formatMoneda(efectiu);
+
+            const tbody = document.getElementById('taula-empreses');
+            tbody.innerHTML = '';
+
+            let valorTotalCartera = 0;
+
+            for (let empresa in dadesEmpreses) {
+                const preuActual = dadesEmpreses[empresa].preus[indexMesActual];
+                const accionsMeves = carteraJugador[empresa];
+                const valorEuros = accionsMeves * preuActual;
+                valorTotalCartera += valorEuros;
+
+                // Càlcul del preu de compra mitjà
+                const dinersPosats = totalDinersInvertits[empresa];
+                const preuMitjaCompra = accionsMeves > 0 ? (dinersPosats / accionsMeves) : 0;
+
+                // Calcular la pujada/rendiment de l'acció en propietat
+                let textPujada = "-";
+                let classeRendiment = "text-slate-500";
+                
+                if (accionsMeves > 0 && preuMitjaCompra > 0) {
+                    const evolucioPercent = ((preuActual - preuMitjaCompra) / preuMitjaCompra) * 100;
+                    const diferenciaEuros = valorEuros - dinersPosats;
+                    const signe = evolucioPercent >= 0 ? '+' : '';
+                    
+                    textPujada = `${signe}${diferenciaEuros.toFixed(2)}€ (${signe}${evolucioPercent.toFixed(1)}%)`;
+                    classeRendiment = evolucioPercent >= 0 ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold';
+                }
+
+                const fila = document.createElement('tr');
+                fila.className = "hover:bg-slate-900/60 cursor-pointer border-b border-slate-800/40 transition-colors";
+                fila.onclick = () => {
+                    document.getElementById('input-cerca-empresa').value = empresa;
+                    empresaSeleccionadaActual = empresa;
+                    seleccionarEmpresa(empresa);
+                };
+
+                fila.innerHTML = `
+                    <td class="p-3 pl-5 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full" style="background-color: ${dadesEmpreses[empresa].color}"></span>
+                        <span class="font-bold text-white">${empresa}</span>
+                    </td>
+                    <td class="p-3 text-right font-semibold font-mono-custom text-slate-200">${formatMoneda(preuActual)}</td>
+                    <td class="p-3 text-right font-mono-custom text-slate-400">${preuMitjaCompra > 0 ? formatMoneda(preuMitjaCompra) : '-'}</td>
+                    <td class="p-3 text-right text-slate-400 font-mono-custom">${accionsMeves > 0 ? accionsMeves.toFixed(4) : 'Cap'}</td>
+                    <td class="p-3 text-right ${classeRendiment} font-mono-custom">${textPujada}</td>
+                    <td class="p-3 text-right font-bold pr-5 text-emerald-400 font-mono-custom">${formatMoneda(valorEuros)}</td>
+                `;
+                tbody.appendChild(fila);
+            }
+
+            const totalPatrimoni = efectiu + valorTotalCartera;
+            document.getElementById('txt-patrimoni').textContent = formatMoneda(totalPatrimoni);
+
+            seleccionarEmpresa(empresaSeleccionadaActual);
+            dibuixarCanvasPrincipal();
+        }
+
+        function seleccionarEmpresa(empresa) {
+            if (!empresa || !dadesEmpreses[empresa]) return;
+            const preuActual = dadesEmpreses[empresa].preus[indexMesActual];
+            const accionsMeves = carteraJugador[empresa];
+            const valorActual = accionsMeves * preuActual;
+
+            document.getElementById('detalls-preu').textContent = formatMoneda(preuActual);
+            document.getElementById('detalls-accions').textContent = `${accionsMeves.toFixed(4)} u`;
+            document.getElementById('detalls-valor-actual').textContent = formatMoneda(valorActual);
+        }
+
+        function omplirImportFix(valor) {
+            document.getElementById('input-import-proves').value = valor;
+        }
+
+        // Invertir / Comprar accions de l'empresa seleccionada (Mínim 100 €)
+        function comprarAccions() {
+            const empresa = empresaSeleccionadaActual;
+            const importCompra = parseFloat(document.getElementById('input-import-proves').value);
+
+            if (!dadesEmpreses[empresa]) {
+                mostrarAlertaSandbox("Empresa no vàlida", "Siusplau, cerca i selecciona una empresa existent abans de comprar.");
+                return;
+            }
+
+            if (isNaN(importCompra) || importCompra < 100) {
+                mostrarAlertaSandbox("Import Mínim Requerit", "L'import mínim per a qualsevol inversió ha de ser de 100,00 €.");
+                return;
+            }
+
+            if (importCompra > efectiu) {
+                mostrarAlertaSandbox("Efectiu Insuficient", "No disposes de suficient efectiu estalviat per a aquesta transacció. Avança de mes per estalviar més.");
+                return;
+            }
+
+            const preuUnitari = dadesEmpreses[empresa].preus[indexMesActual];
+            const accionsAdquirides = importCompra / preuUnitari;
+
+            efectiu -= importCompra;
+            carteraJugador[empresa] += accionsAdquirides;
+            totalDinersInvertits[empresa] += importCompra;
+
+            afegirLog("INVERSIO", empresa, accionsAdquirides, importCompra, preuUnitari);
+            document.getElementById('input-import-proves').value = '';
+            actualitzarInterficie();
+        }
+
+        // Retirar part de la inversió (Venda parcial, mínim 100 €)
+        function retirarPartInversio() {
+            const empresa = empresaSeleccionadaActual;
+            const importRetirada = parseFloat(document.getElementById('input-import-proves').value);
+            const accionsMevas = carteraJugador[empresa];
+            const preuUnitari = dadesEmpreses[empresa].preus[indexMesActual];
+            const valorTotalInversio = accionsMevas * preuUnitari;
+
+            if (isNaN(importRetirada) || importRetirada < 100) {
+                mostrarAlertaSandbox("Retirada Mínima Requerida", "L'import de fons que vols treure de l'acció ha de ser d'un mínim de 100,00 €.");
+                return;
+            }
+
+            if (importRetirada > valorTotalInversio) {
+                mostrarAlertaSandbox("Límit d'actiu superat", "L'import indicat supera el valor total que tens invertit en aquesta acció. Si vols desfer-te de tot, prem 'Vendre i tancar acció'.");
+                return;
+            }
+
+            // Càlcul de quantitat d'accions que corresponen a la retirada
+            const accionsARetirar = importRetirada / preuUnitari;
+
+            // Restem proporcionalment dels diners originalment invertits per no desquadrar el preu mitjà de compra
+            const ratiInversioRetirada = totalDinersInvertits[empresa] * (accionsARetirar / accionsMevas);
+            totalDinersInvertits[empresa] = Math.max(0, totalDinersInvertits[empresa] - ratiInversioRetirada);
+
+            carteraJugador[empresa] -= accionsARetirar;
+            efectiu += importRetirada;
+
+            afegirLog("RETIRADA PART", empresa, accionsARetirar, importRetirada, preuUnitari);
+            document.getElementById('input-import-proves').value = '';
+            actualitzarInterficie();
+        }
+
+        // Vendre tota l'acció i tancar completament la posició
+        function vendreAccioSencera() {
+            const empresa = empresaSeleccionadaActual;
+            const accionsMevas = carteraJugador[empresa];
+
+            if (accionsMevas <= 0) {
+                mostrarAlertaSandbox("No tens accions", `No disposes de cap acció de ${empresa} per poder tancar la teva inversió.`);
+                return;
+            }
+
+            const preuUnitari = dadesEmpreses[empresa].preus[indexMesActual];
+            const eurosRecuperats = accionsMevas * preuUnitari;
+
+            efectiu += eurosRecuperats;
+            carteraJugador[empresa] = 0;
+            totalDinersInvertits[empresa] = 0; // Es reinicia el cost mitjà
+
+            afegirLog("LIQUIDACIO TOTAL", empresa, accionsMevas, eurosRecuperats, preuUnitari);
+            document.getElementById('input-import-proves').value = '';
+            actualitzarInterficie();
+        }
+
+        // Enregistrar operacions al llistat de logs per fer de pont
+        function afegirLog(tipus, empresa, quantitat, valorEuros, preuAccio) {
+            const dataTextLog = obtenirFormatData(indexMesActual);
+            const contenidorLogs = document.getElementById('llistat-logs');
+
+            if (historialLogs.length === 0) {
+                contenidorLogs.innerHTML = '';
+            }
+
+            const logItem = {
+                data: dataTextLog,
+                tipus: tipus,
+                empresa: empresa,
+                quantitat: quantitat,
+                euros: valorEuros,
+                preu: preuAccio
+            };
+
+            historialLogs.unshift(logItem);
+
+            const divLog = document.createElement('div');
+            const colorAccio = (tipus === "INVERSIO" || tipus === "PRÉSTEC") ? "border-emerald-500/25 bg-emerald-500/5 text-emerald-300" : "border-rose-500/25 bg-rose-500/5 text-rose-300";
+            
+            let detallsExtra = "";
+            if (tipus === "INVERSIO" || tipus === "RETIRADA PART" || tipus === "LIQUIDACIO TOTAL") {
+                detallsExtra = `${quantitat.toFixed(4)} u • preu: ${formatMoneda(preuAccio)}`;
+            } else if (tipus === "PRÉSTEC") {
+                detallsExtra = "Ingrés de crèdit bancari concedit";
+            } else if (tipus === "PAGAMENT QUOTA") {
+                detallsExtra = "Amortització de préstec";
+            }
+
+            divLog.className = `p-2 rounded-xl border ${colorAccio} flex justify-between items-center`;
+            divLog.innerHTML = `
+                <div>
+                    <span class="font-bold text-[8px] bg-slate-950 px-1.5 py-0.5 rounded text-slate-300 mr-1 font-mono-custom">${logItem.data}</span>
+                    <strong>${tipus}</strong> • ${empresa.split(" (")[0]}
+                    <div class="text-[9px] text-slate-500 mt-0.5 font-mono-custom">
+                        ${detallsExtra}
+                    </div>
+                </div>
+                <div class="text-right font-bold text-xs font-mono-custom">
+                    ${(tipus === "INVERSIO" || tipus === "PAGAMENT QUOTA") ? "-" : "+"}${formatMoneda(valorEuros)}
+                </div>
+            `;
+
+            contenidorLogs.insertBefore(divLog, contenidorLogs.firstChild);
+        }
+
+        // Avançar un mes en el temps cap endavant (+500€ per a inversió periòdica)
+        function avancarMes() {
+            if (indexMesActual < totalMesos - 1) {
+                indexMesActual++;
+                efectiu += 500; // Increment mensual realistat de fons
+                
+                // Descomptar quotes dels préstecs
+                let quotesPagades = 0;
+                for (let i = llistaPrestecsActius.length - 1; i >= 0; i--) {
+                    let p = llistaPrestecsActius[i];
+                    efectiu -= p.quota;
+                    quotesPagades += p.quota;
+                    p.deuteRestant -= p.quota;
+                    p.mesosRestants--;
+
+                    if (p.mesosRestants <= 0) {
+                        llistaPrestecsActius.splice(i, 1);
+                    }
+                }
+                
+                if (quotesPagades > 0) {
+                    afegirLog("PAGAMENT QUOTA", "Banc", 0, quotesPagades, 0);
+                    actualitzarLlistaPrestecs();
+                }
+
+                const nouAny = 2015 + Math.floor(indexMesActual / 12);
+                
+                // Actualització del requadre de notícies per l'any actual
+                document.getElementById('bloc-noticies').innerHTML = `
+                    <p class="font-bold text-emerald-400 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="radio" class="w-3.5 h-3.5 animate-pulse-green"></i> Notícia del sector (${obtenirFormatData(indexMesActual)}):
+                    </p>
+                    <p class="text-slate-300">${titularsAnuals[nouAny]}</p>
+                `;
+
+                actualitzarInterficie();
+                lucide.createIcons();
+                
+                if (indexMesActual === totalMesos - 1) {
+                    const botoAvançar = document.getElementById('btn-passar-mes');
+                    botoAvançar.disabled = true;
+                    botoAvançar.className = "bg-slate-800 text-slate-500 font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs cursor-not-allowed";
+                    
+                    let carteraEuros = 0;
+                    for (let empresa in dadesEmpreses) {
+                        carteraEuros += carteraJugador[empresa] * dadesEmpreses[empresa].preus[indexMesActual];
+                    }
+                    const totalPatrimoni = efectiu + carteraEuros;
+                    
+                    // Total ingressat (144 mesos * 500 € = 72.000 € acumulats d'estalvi)
+                    const totalEstalviat = 72000;
+                    const increment = ((totalPatrimoni - totalEstalviat) / totalEstalviat) * 100;
+
+                    mostrarAlertaSandbox(
+                        "Anàlisi Final (Desembre 2026)", 
+                        `Has completat la teva simulació mensual de 12 anys! Has estalviat de forma recurrent un total de ${formatMoneda(totalEstalviat)}. El teu patrimoni total actual és de ${formatMoneda(totalPatrimoni)}. El teu guany de mercat és del ${increment.toFixed(2)}%!`
+                    );
+                }
+            }
+        }
+
+        // Calcular els interessos i la quota del préstec en temps real
+        function calcularPrestec() {
+            const importReq = parseFloat(document.getElementById('input-prestec-import').value);
+            const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
+            document.getElementById('label-prestec-mesos').textContent = `${mesos} mesos`;
+
+            if (isNaN(importReq) || importReq < 500) {
+                document.getElementById('detalls-prestec-interes').textContent = "0,00%";
+                document.getElementById('detalls-prestec-quota').textContent = "0,00 €";
+                return;
+            }
+
+            // Càlcul d'interessos realista: base + suplement temps - descompte volum
+            let interesBase = 0.04; // 4% fix anual base simulat
+            let interesTemps = (mesos / 6) * 0.002; // A més temps, més risc (0.2% cada 6 mesos)
+            let descompteVolum = (importReq >= 5000) ? 0.005 : 0;
+            if (importReq >= 20000) descompteVolum = 0.01;
+
+            let interesTotal = interesBase + interesTemps - descompteVolum;
+            let totalAPagar = importReq * (1 + interesTotal);
+            let quota = totalAPagar / mesos;
+
+            document.getElementById('detalls-prestec-interes').textContent = `${(interesTotal * 100).toFixed(2)}%`;
+            document.getElementById('detalls-prestec-quota').textContent = `${quota.toFixed(2)} €`;
+        }
+
+        // Executar la creació del préstec
+        function contractarPrestec() {
+            const importReq = parseFloat(document.getElementById('input-prestec-import').value);
+            const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
+
+            if (isNaN(importReq) || importReq < 500) {
+                mostrarAlertaSandbox("Error al Préstec", "Per contractar el crèdit has de sol·licitar un mínim de 500 €.");
+                return;
+            }
+
+            let interesBase = 0.04;
+            let interesTemps = (mesos / 6) * 0.002;
+            let descompteVolum = (importReq >= 5000) ? 0.005 : 0;
+            if (importReq >= 20000) descompteVolum = 0.01;
+
+            let interesTotal = interesBase + interesTemps - descompteVolum;
+            let totalAPagar = importReq * (1 + interesTotal);
+            let quota = totalAPagar / mesos;
+
+            // Protecció de seguretat bancària (simulada)
+            if (quota > efectiu + 500) {
+                mostrarAlertaSandbox("Risc Elevat", "La teva quota mensual és massa alta per al teu nivell d'efectiu i estalvi de 500€/mes. Operació denegada pel banc.");
+                return;
+            }
+
+            llistaPrestecsActius.push({
+                id: Date.now(),
+                importInicial: importReq,
+                totalAPagar: totalAPagar,
+                deuteRestant: totalAPagar,
+                mesosRestants: mesos,
+                quota: quota
+            });
+
+            efectiu += importReq;
+            afegirLog("PRÉSTEC", "Banc", 0, importReq, 0);
+
+            document.getElementById('input-prestec-import').value = '';
+            calcularPrestec();
+            actualitzarLlistaPrestecs();
+            actualitzarInterficie();
+            mostrarAlertaSandbox("Préstec Concedit", `El banc t'ha ingressat ${formatMoneda(importReq)} en el teu compte. Pagament mensual: ${formatMoneda(quota)} durant ${mesos} mesos.`);
+        }
+
+        // Actualitzar l'esborrany visual dels préstecs actuals
+        function actualitzarLlistaPrestecs() {
+            const contenidor = document.getElementById('llista-prestecs-actius');
+            contenidor.innerHTML = '';
+            
+            if (llistaPrestecsActius.length === 0) {
+                contenidor.innerHTML = `<div class="text-xs text-slate-500 italic">No tens cap deute bancari actiu.</div>`;
+                return;
+            }
+
+            llistaPrestecsActius.forEach(p => {
+                contenidor.innerHTML += `
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-rose-500/30 text-[10px]">
+                        <div class="flex justify-between font-bold text-white mb-1.5">
+                            <span class="flex items-center gap-1"><i data-lucide="file-text" class="w-3 h-3 text-rose-400"></i> Crèdit Actiu</span>
+                            <span class="text-slate-400">${p.mesosRestants} mesos pendents</span>
+                        </div>
+                        <div class="flex justify-between items-center text-slate-400 mt-1 pt-1.5 border-t border-slate-800">
+                            <div>Resta per pagar: <span class="font-bold text-rose-400 font-mono-custom">${formatMoneda(p.deuteRestant)}</span></div>
+                            <div>Quota: <span class="font-bold text-emerald-400 font-mono-custom">${formatMoneda(p.quota)}</span></div>
+                        </div>
+                    </div>
+                `;
+            });
+            lucide.createIcons();
+        }
+
+        function formatMoneda(valor) {
+            return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(valor);
+        }
+
+        window.onload = function() {
+            generarDadesMensuals();
+
+            inicialitzarCerca();
+            dibuixarLlegenda();
+            adaptarCanvasAMida();
+            window.addEventListener('resize', adaptarCanvasAMida);
+
+            actualitzarLlistaPrestecs();
+            actualitzarInterficie();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
