@@ -52,7 +52,7 @@
                 </div>
             </div>
 
-            <!-- CONTROLS TEMPORALS I ESTATS (Sense botó desfer) -->
+            <!-- CONTROLS TEMPORALS I ESTATS -->
             <div class="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl">
                 
                 <div class="text-center px-4 py-1.5 bg-slate-950/80 rounded-xl border border-slate-800">
@@ -614,7 +614,7 @@
                     if (transaccions && transaccions.length > 0) {
                         transaccions.forEach(t => {
                             if (t.mes >= viewStart && t.mes <= viewEnd && t.mes <= indexMesActual) {
-                                const rx = (t.mes - viewStart) / rangVisibleMesos;
+                                const rx = (t.mes - viewStart) / rangVisible;
                                 const px = margeEsquerre + ampleGrafic * rx;
                                 const ry = pHis[t.mes] / maxPreuEuros;
                                 const py = margeSuperior + altGrafic * (1 - ry);
@@ -775,6 +775,41 @@
 
             ind.innerHTML = `<i data-lucide="${icon}" class="w-3 h-3"></i> Risc: ${textRisc}`;
             ind.className = `flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg border ${colorRisc}`;
+            lucide.createIcons();
+        }
+
+        // --- RESUM ANUAL (POPUP RESTAURAT) ---
+        function mostrarResumAnual() {
+            const anyCalculat = 2015 + Math.floor(indexMesActual / 12);
+            document.getElementById('resum-any-text').textContent = anyCalculat;
+            
+            // Càlculs de resum
+            const estalviAportat = (indexMesActual + 1) * 500;
+            
+            let deuteTotalActiu = 0;
+            llistaPrestecsActius.forEach(p => { deuteTotalActiu += p.deuteRestant; });
+            
+            let valorAccions = 0;
+            for (let empresa in dadesEmpreses) {
+                valorAccions += carteraJugador[empresa] * dadesEmpreses[empresa].preus[indexMesActual];
+            }
+            
+            const patrimoniReal = (efectiu + valorAccions) - deuteTotalActiu;
+            const beneficiNet = patrimoniReal - estalviAportat;
+
+            document.getElementById('resum-estalvi').textContent = formatMoneda(estalviAportat);
+            document.getElementById('resum-patrimoni').textContent = formatMoneda(patrimoniReal);
+            
+            const txtBenefici = document.getElementById('resum-benefici');
+            if(beneficiNet >= 0) {
+                txtBenefici.textContent = `+${formatMoneda(beneficiNet)}`;
+                txtBenefici.className = "font-bold text-emerald-400 font-mono-custom text-lg";
+            } else {
+                txtBenefici.textContent = formatMoneda(beneficiNet);
+                txtBenefici.className = "font-bold text-rose-400 font-mono-custom text-lg";
+            }
+
+            document.getElementById('anual-modal').classList.remove('hidden');
             lucide.createIcons();
         }
 
@@ -985,33 +1020,58 @@
         function avancarMes() { processarTemps(1); }
         function avancarAny() { processarTemps(12); }
 
-        // --- BANCS ---
+        // --- BANCS (AMB PENALITZACIÓ PER EFECTIU NEGATIU) ---
         function calcularPrestec() {
             const imp = parseFloat(document.getElementById('input-prestec-import').value);
             const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
             document.getElementById('label-prestec-mesos').textContent = `${mesos} mesos`;
             if (isNaN(imp) || imp < 500) { document.getElementById('detalls-prestec-interes').textContent = "0,00%"; document.getElementById('detalls-prestec-quota').textContent = "0,00 €"; return; }
+            
+            // Càlcul d'interessos base
             let intTotal = 0.04 + ((mesos/6)*0.002) - (imp>=5000?0.005:0);
+            
+            // PENALITZACIÓ: Si l'efectiu és negatiu, augmentem molt els interessos (+15% d'interès addicional de risc)
+            if (efectiu < 0) {
+                intTotal += 0.15;
+            }
+            
             let quota = (imp * (1+intTotal)) / mesos;
-            document.getElementById('detalls-prestec-interes').textContent = `${(intTotal*100).toFixed(2)}%`; document.getElementById('detalls-prestec-quota').textContent = `${quota.toFixed(2)} €`;
+            document.getElementById('detalls-prestec-interes').textContent = `${(intTotal*100).toFixed(2)}%` + (efectiu < 0 ? " (Penalitzat 🔴)" : ""); 
+            document.getElementById('detalls-prestec-quota').textContent = `${quota.toFixed(2)} €`;
         }
 
         function contractarPrestec() {
             const imp = parseFloat(document.getElementById('input-prestec-import').value);
             const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
             if (isNaN(imp) || imp < 500) return;
+            
             let intTotal = 0.04 + ((mesos/6)*0.002) - (imp>=5000?0.005:0);
+            
+            // Aplicar la mateixa penalització en el contracte del préstec
+            let penalitzat = false;
+            if (efectiu < 0) {
+                intTotal += 0.15;
+                penalitzat = true;
+            }
+            
             let quota = (imp * (1+intTotal)) / mesos;
-            if (quota > efectiu + 500) return mostrarAlertaSandbox("Risc Elevat", "La quota mensual és massa alta.");
+            if (quota > efectiu + 500) return mostrarAlertaSandbox("Risc Elevat", "La quota mensual és massa alta per al teu nivell d'estalvi.");
             
             llistaPrestecsActius.push({ id: Date.now(), importInicial: imp, mesosInicials: mesos, totalAPagar: imp*(1+intTotal), deuteRestant: imp*(1+intTotal), mesosRestants: mesos, quota: quota });
             efectiu += imp;
             document.getElementById('input-prestec-import').value = '';
-            actualitzarLlistaPrestecs(); actualitzarInterficie();
+            actualitzarLlistaPrestecs(); 
+            actualitzarInterficie();
+            
+            if (penalitzat) {
+                mostrarAlertaSandbox("Préstec Penalitzat Concedit", `S'ha aprovat el préstec de ${formatMoneda(imp)}, però en trobar-te en números vermells (efectiu negatiu), s'ha aplicat un recàrrec d'interès del +15% per alt risc.`);
+            } else {
+                mostrarAlertaSandbox("Préstec Concedit", `Préstec de ${formatMoneda(imp)} ingressat correctament amb èxit.`);
+            }
         }
 
         function actualitzarLlistaPrestecs() {
-            // No hi ha UI extra expandida necessària
+            // Es pot expandir si s'utilitza una llista visual detallada, ara s'actualitza l'estat via interfície.
         } 
 
         function formatMoneda(v) { return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(v); }
