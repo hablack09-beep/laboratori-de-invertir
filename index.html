@@ -47,7 +47,7 @@
                         <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-wider">Educatiu</span>
                     </div>
                     <div class="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-                        <span title="Costos operatius que pagues al broker">Comissió de transacció: 0.1% (Mín 1€)</span>
+                        <span title="Impost de vendes: 20% | Compres: 0.1%">Costos operatius: Compra 0.1% | Venda 20% impostos</span>
                     </div>
                 </div>
             </div>
@@ -250,7 +250,7 @@
                 </button>
             </div>
 
-            <!-- REGISTRE DE TRANSACCIONS (RECUPERAT) -->
+            <!-- REGISTRE DE TRANSACCIONS -->
             <div class="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col min-h-[180px] shadow-lg">
                 <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
                     <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i>
@@ -286,7 +286,7 @@
                     <span id="modal-actiu-valor" class="font-bold text-emerald-400 font-mono-custom">0,00 €</span>
                 </div>
                 <div class="col-span-2 bg-[#0b0f19] p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Efectiu que tens per comprar:</span>
+                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Efectiu que tens:</span>
                     <span id="modal-actiu-efectiu" class="font-bold text-white font-mono-custom">0,00 €</span>
                 </div>
             </div>
@@ -297,7 +297,10 @@
                     <input type="number" id="modal-import" min="100" placeholder="Ex: 500" class="w-full bg-[#0b0f19] border border-slate-700 rounded-xl p-3 text-sm text-white font-mono-custom focus:outline-none focus:border-emerald-500">
                     <div class="absolute right-3 top-3.5 text-xs text-slate-500 font-mono-custom">EUR</div>
                 </div>
-                <div class="text-[9px] text-slate-500 mt-1 ml-1">+ Comissió broker (0.1%, mín 1€)</div>
+                <div class="text-[9px] text-slate-500 mt-1 ml-1 flex justify-between">
+                    <span class="text-emerald-500">Compra: +0.1% comissió</span>
+                    <span class="text-rose-500">Venda: -20% d'impostos</span>
+                </div>
             </div>
 
             <div class="flex flex-col gap-2">
@@ -305,10 +308,10 @@
                     <i data-lucide="shopping-cart" class="w-4 h-4"></i> Comprar Accions
                 </button>
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="executarVendaParcialModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold py-2.5 rounded-xl transition-all text-xs">
+                    <button onclick="executarVendaParcialModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold py-2.5 rounded-xl transition-all text-xs" title="Es retindrà un 20% d'impostos de l'import venut">
                         Vendre part
                     </button>
-                    <button onclick="executarVendaTotalModal()" class="bg-rose-900/40 hover:bg-rose-800/60 border border-rose-900/50 text-rose-300 font-bold py-2.5 rounded-xl transition-all text-xs">
+                    <button onclick="executarVendaTotalModal()" class="bg-rose-900/40 hover:bg-rose-800/60 border border-rose-900/50 text-rose-300 font-bold py-2.5 rounded-xl transition-all text-xs" title="Es retindrà un 20% d'impostos del valor total">
                         Liquidar tot
                     </button>
                 </div>
@@ -485,6 +488,7 @@
         let llistaPrestecsActius = [];
         let empresaSeleccionadaActual = "Apple (AAPL)";
         let assolimentsDesbloquejats = { div: false, sup: false, tau: false };
+        let historialLogs = [];
 
         let viewStart = 0;
         let viewEnd = totalMesos - 1;
@@ -908,7 +912,7 @@
         }
         function tancarModalActiu() { document.getElementById('detall-actiu-modal').classList.add('hidden'); actualitzarInterficie(); }
 
-        // Calcul de comissió (0.1%, mín 1€)
+        // Calcul de comissió COMPRA (0.1%, mín 1€)
         function calcComissio(importBrut) { return Math.max(1, importBrut * 0.001); }
 
         function executarCompraModal() {
@@ -931,6 +935,7 @@
             obrirModalAccio(empresaModalOberta);
         }
 
+        // Venda Parcial amb un 20% d'impostos de retenció
         function executarVendaParcialModal() {
             const imp = parseFloat(document.getElementById('modal-import').value);
             if(isNaN(imp) || imp < 100) return mostrarAlertaSandbox("Import", "Mínim 100€");
@@ -940,32 +945,40 @@
             const vTotal = acc * pAct;
             
             if(imp > vTotal) return mostrarAlertaSandbox("Supera límit", "L'import supera el teu actiu. Utilitza Liquidar.");
-            const costComissio = calcComissio(imp);
+            
+            // Retenció del 20% en concepte d'impostos
+            const impostos = imp * 0.20;
+            const netARebre = imp - impostos;
             
             const accRet = imp / pAct;
             totalDinersInvertits[empresaModalOberta] = Math.max(0, totalDinersInvertits[empresaModalOberta] - (totalDinersInvertits[empresaModalOberta] * (accRet/acc)));
             carteraJugador[empresaModalOberta] -= accRet;
-            efectiu += (imp - costComissio);
+            
+            efectiu += netARebre; // Només ingressem el 80%
 
             historialTransaccionsCanvas[empresaModalOberta].push({ mes: indexMesActual, tipus: 'venda' });
-            afegirLog("VENDA PART.", empresaModalOberta, accRet, imp-costComissio, pAct);
+            afegirLog("VENDA PART.", empresaModalOberta, accRet, netARebre, pAct);
             actualitzarInterficie();
             obrirModalAccio(empresaModalOberta);
         }
 
+        // Venda Total amb un 20% d'impostos de retenció
         function executarVendaTotalModal() {
             const acc = carteraJugador[empresaModalOberta];
             if(acc <= 0) return;
             const pAct = dadesEmpreses[empresaModalOberta].preus[indexMesActual];
             const brut = acc * pAct;
-            const comi = calcComissio(brut);
             
-            efectiu += (brut - comi);
+            // Retenció del 20% en concepte d'impostos
+            const impostos = brut * 0.20;
+            const netARebre = brut - impostos;
+            
+            efectiu += netARebre; // Només ingressem el 80%
             carteraJugador[empresaModalOberta] = 0;
             totalDinersInvertits[empresaModalOberta] = 0;
 
             historialTransaccionsCanvas[empresaModalOberta].push({ mes: indexMesActual, tipus: 'venda' });
-            afegirLog("LIQUIDACIO", empresaModalOberta, acc, brut-comi, pAct);
+            afegirLog("LIQUIDACIO", empresaModalOberta, acc, netARebre, pAct);
             actualitzarInterficie();
             tancarModalActiu();
         }
@@ -986,7 +999,7 @@
 
             historialLogs.unshift(logItem);
 
-            if (!contenidorLogs) return; // Prevenció d'errors per si falta la interfície visual
+            if (!contenidorLogs) return; 
 
             if (historialLogs.length === 1) {
                 contenidorLogs.innerHTML = '';
@@ -996,8 +1009,10 @@
             const colorAccio = (tipus === "COMPRA" || tipus === "PRÉSTEC") ? "border-emerald-500/25 bg-emerald-500/5 text-emerald-300" : "border-rose-500/25 bg-rose-500/5 text-rose-300";
             
             let detallsExtra = "";
-            if (tipus === "COMPRA" || tipus === "VENDA PART." || tipus === "LIQUIDACIO") {
+            if (tipus === "COMPRA") {
                 detallsExtra = `${quantitat.toFixed(4)} u • preu: ${formatMoneda(preuAccio)}`;
+            } else if (tipus === "VENDA PART." || tipus === "LIQUIDACIO") {
+                detallsExtra = `${quantitat.toFixed(4)} u venudes (Net 80%)`; // Avís en el registre
             } else if (tipus === "PRÉSTEC") {
                 detallsExtra = "Ingrés de crèdit bancari concedit";
             } else if (tipus === "QUOTA BANC") {
@@ -1044,7 +1059,6 @@
 
                 const nouAny = 2015 + Math.floor(indexMesActual / 12);
                 
-                // Botó Crisi a 2020 i 2022
                 const btnCrisi = document.getElementById('btn-crisi-analisis');
                 if (nouAny === 2020 || nouAny === 2022) {
                     btnCrisi.classList.remove('hidden');
@@ -1061,7 +1075,6 @@
                     if(tenim) { assolimentsDesbloquejats.sup = true; document.getElementById('logro-2').classList.replace('logro-locked', 'logro-unlocked'); mostrarAlertaSandbox("🏆 Medalla Desbloquejada", "Ets un 'Supervivent'! Has mantingut posicions superant l'històric pànic del 2020."); }
                 }
 
-                // Esdeveniments (Només s'apliquen si avancem 1 mes)
                 let noticia = `<span class="text-emerald-400 font-bold mb-1 block">Mercat:</span> ${titularsAnuals[nouAny]}`;
                 if (quantsMesos === 1 && Math.random() < 0.15) {
                     let ev = eventsAleatorisMercat[Math.floor(Math.random() * eventsAleatorisMercat.length)];
@@ -1080,24 +1093,35 @@
             }
 
             actualitzarInterficie();
-            actualitzarLlistaPrestecs();
             if(indexMesActual % 12 === 11 && indexMesActual < totalMesos - 1) mostrarResumAnual();
         }
 
         function avancarMes() { processarTemps(1); }
         function avancarAny() { processarTemps(12); }
 
-        // --- BANCS (AMB PENALITZACIÓ PER EFECTIU NEGATIU) ---
+        // --- BANCS (AMB MÍNIM 5% I PENALITZACIÓ) ---
         function calcularPrestec() {
             const imp = parseFloat(document.getElementById('input-prestec-import').value);
             const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
             document.getElementById('label-prestec-mesos').textContent = `${mesos} mesos`;
-            if (isNaN(imp) || imp < 500) { document.getElementById('detalls-prestec-interes').textContent = "0,00%"; document.getElementById('detalls-prestec-quota').textContent = "0,00 €"; return; }
             
-            // Càlcul d'interessos base
-            let intTotal = 0.04 + ((mesos/6)*0.002) - (imp>=5000?0.005:0);
+            if (isNaN(imp) || imp < 500) { 
+                document.getElementById('detalls-prestec-interes').textContent = "0,00%"; 
+                document.getElementById('detalls-prestec-quota').textContent = "0,00 €"; 
+                return; 
+            }
             
-            // PENALITZACIÓ: Si l'efectiu és negatiu, augmentem molt els interessos (+15% d'interès addicional de risc)
+            // Càlcul d'interessos (Base alçada al 5%)
+            let interesBase = 0.05; // 5% Mínim requerit
+            let interesTemps = (mesos/6) * 0.002;
+            let descompteVolum = (imp >= 5000) ? 0.005 : 0;
+            
+            let intTotal = interesBase + interesTemps - descompteVolum;
+            
+            // Assegurem la barrera mínima del 5% per seguretat
+            intTotal = Math.max(0.05, intTotal);
+            
+            // PENALITZACIÓ: Efectiu negatiu
             if (efectiu < 0) {
                 intTotal += 0.15;
             }
@@ -1112,9 +1136,13 @@
             const mesos = parseInt(document.getElementById('input-prestec-mesos').value);
             if (isNaN(imp) || imp < 500) return;
             
-            let intTotal = 0.04 + ((mesos/6)*0.002) - (imp>=5000?0.005:0);
+            let interesBase = 0.05; // 5% Mínim
+            let interesTemps = (mesos/6) * 0.002;
+            let descompteVolum = (imp >= 5000) ? 0.005 : 0;
             
-            // Aplicar la mateixa penalització en el contracte del préstec
+            let intTotal = interesBase + interesTemps - descompteVolum;
+            intTotal = Math.max(0.05, intTotal); // Barrera del 5%
+            
             let penalitzat = false;
             if (efectiu < 0) {
                 intTotal += 0.15;
@@ -1127,19 +1155,14 @@
             llistaPrestecsActius.push({ id: Date.now(), importInicial: imp, mesosInicials: mesos, totalAPagar: imp*(1+intTotal), deuteRestant: imp*(1+intTotal), mesosRestants: mesos, quota: quota });
             efectiu += imp;
             document.getElementById('input-prestec-import').value = '';
-            actualitzarLlistaPrestecs(); 
             actualitzarInterficie();
             
             if (penalitzat) {
-                mostrarAlertaSandbox("Préstec Penalitzat Concedit", `S'ha aprovat el préstec de ${formatMoneda(imp)}, però en trobar-te en números vermells (efectiu negatiu), s'ha aplicat un recàrrec d'interès del +15% per alt risc.`);
+                mostrarAlertaSandbox("Préstec Penalitzat Concedit", `S'ha aprovat el préstec de ${formatMoneda(imp)}, però en trobar-te en números vermells, s'ha aplicat un recàrrec per alt risc.`);
             } else {
-                mostrarAlertaSandbox("Préstec Concedit", `Préstec de ${formatMoneda(imp)} ingressat correctament amb èxit.`);
+                mostrarAlertaSandbox("Préstec Concedit", `Préstec de ${formatMoneda(imp)} ingressat correctament.`);
             }
         }
-
-        function actualitzarLlistaPrestecs() {
-            // Es pot expandir si s'utilitza una llista visual detallada, ara s'actualitza l'estat via interfície.
-        } 
 
         function formatMoneda(v) { return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(v); }
 
