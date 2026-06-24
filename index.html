@@ -250,6 +250,17 @@
                 </button>
             </div>
 
+            <!-- REGISTRE DE TRANSACCIONS (RECUPERAT) -->
+            <div class="bg-[#111827] border border-slate-800 rounded-2xl p-5 flex flex-col min-h-[180px] shadow-lg">
+                <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i>
+                    Registre de Transaccions
+                </h3>
+                <div id="llistat-logs" class="flex-1 overflow-y-auto max-h-[220px] custom-scrollbar flex flex-col gap-2 text-[10px]">
+                    <div class="text-slate-600 text-center py-6 font-mono-custom">Encara no s'ha fet cap operació.</div>
+                </div>
+            </div>
+
         </div>
     </main>
 
@@ -916,6 +927,7 @@
             
             historialTransaccionsCanvas[empresaModalOberta].push({ mes: indexMesActual, tipus: 'compra' });
             afegirLog("COMPRA", empresaModalOberta, imp/pAct, costTotal, pAct);
+            actualitzarInterficie();
             obrirModalAccio(empresaModalOberta);
         }
 
@@ -937,6 +949,7 @@
 
             historialTransaccionsCanvas[empresaModalOberta].push({ mes: indexMesActual, tipus: 'venda' });
             afegirLog("VENDA PART.", empresaModalOberta, accRet, imp-costComissio, pAct);
+            actualitzarInterficie();
             obrirModalAccio(empresaModalOberta);
         }
 
@@ -953,7 +966,61 @@
 
             historialTransaccionsCanvas[empresaModalOberta].push({ mes: indexMesActual, tipus: 'venda' });
             afegirLog("LIQUIDACIO", empresaModalOberta, acc, brut-comi, pAct);
+            actualitzarInterficie();
             tancarModalActiu();
+        }
+
+        // --- ENREGISTRAR OPERACIONS ---
+        function afegirLog(tipus, empresa, quantitat, valorEuros, preuAccio) {
+            const dataTextLog = obtenirFormatData(indexMesActual);
+            const contenidorLogs = document.getElementById('llistat-logs');
+
+            const logItem = {
+                data: dataTextLog,
+                tipus: tipus,
+                empresa: empresa,
+                quantitat: quantitat,
+                euros: valorEuros,
+                preu: preuAccio
+            };
+
+            historialLogs.unshift(logItem);
+
+            if (!contenidorLogs) return; // Prevenció d'errors per si falta la interfície visual
+
+            if (historialLogs.length === 1) {
+                contenidorLogs.innerHTML = '';
+            }
+
+            const divLog = document.createElement('div');
+            const colorAccio = (tipus === "COMPRA" || tipus === "PRÉSTEC") ? "border-emerald-500/25 bg-emerald-500/5 text-emerald-300" : "border-rose-500/25 bg-rose-500/5 text-rose-300";
+            
+            let detallsExtra = "";
+            if (tipus === "COMPRA" || tipus === "VENDA PART." || tipus === "LIQUIDACIO") {
+                detallsExtra = `${quantitat.toFixed(4)} u • preu: ${formatMoneda(preuAccio)}`;
+            } else if (tipus === "PRÉSTEC") {
+                detallsExtra = "Ingrés de crèdit bancari concedit";
+            } else if (tipus === "QUOTA BANC") {
+                detallsExtra = "Amortització de préstec";
+            }
+
+            const esDespesa = (tipus === "COMPRA" || tipus === "QUOTA BANC");
+
+            divLog.className = `p-2 rounded-xl border ${colorAccio} flex justify-between items-center`;
+            divLog.innerHTML = `
+                <div>
+                    <span class="font-bold text-[8px] bg-slate-950 px-1.5 py-0.5 rounded text-slate-300 mr-1 font-mono-custom">${logItem.data}</span>
+                    <strong>${tipus}</strong> • ${empresa.split(" (")[0]}
+                    <div class="text-[9px] text-slate-500 mt-0.5 font-mono-custom">
+                        ${detallsExtra}
+                    </div>
+                </div>
+                <div class="text-right font-bold text-xs font-mono-custom">
+                    ${esDespesa ? "-" : "+"}${formatMoneda(valorEuros)}
+                </div>
+            `;
+
+            contenidorLogs.insertBefore(divLog, contenidorLogs.firstChild);
         }
 
         // --- TEMPS I CRISIS ---
